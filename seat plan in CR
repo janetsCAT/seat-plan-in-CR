@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>座位分配系統</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f0f4f8; padding: 20px; }
+  h1 { text-align: center; color: #2d3748; margin-bottom: 20px; }
+
+  .container { display: flex; gap: 20px; flex-wrap: wrap; }
+
+  /* 左側控制面板 */
+  .control-panel {
+    background: white; border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1); width: 300px; flex-shrink: 0;
+  }
+  .control-panel h2 { color: #4a5568; margin-bottom: 15px; font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+
+  .btn {
+    display: block; width: 100%; padding: 10px; margin-bottom: 10px;
+    border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;
+  }
+  .btn-primary { background: #4299e1; color: white; }
+  .btn-primary:hover { background: #3182ce; }
+  .btn-danger { background: #fc8181; color: white; }
+  .btn-danger:hover { background: #f56565; }
+  .btn-success { background: #68d391; color: white; }
+  .btn-success:hover { background: #48bb78; }
+
+  .section { margin-bottom: 20px; }
+  .section label { font-size: 13px; color: #718096; display: block; margin-bottom: 5px; }
+  .section select, .section input {
+    width: 100%; padding: 8px; border: 1px solid #e2e8f0;
+    border-radius: 6px; font-size: 13px; margin-bottom: 8px;
+  }
+
+  .restriction-list { max-height: 150px; overflow-y: auto; }
+  .restriction-item {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #fff5f5; border: 1px solid #fed7d7; border-radius: 6px;
+    padding: 5px 8px; margin-bottom: 5px; font-size: 12px;
+  }
+  .restriction-item button { background: #fc8181; color: white; border: none; border-radius: 4px; padding: 2px 6px; cursor: pointer; }
+
+  .fixed-list { max-height: 150px; overflow-y: auto; }
+  .fixed-item {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #f0fff4; border: 1px solid #c6f6d5; border-radius: 6px;
+    padding: 5px 8px; margin-bottom: 5px; font-size: 12px;
+  }
+  .fixed-item button { background: #68d391; color: white; border: none; border-radius: 4px; padding: 2px 6px; cursor: pointer; }
+
+  /* 右側教室區域 */
+  .classroom-area { flex: 1; min-width: 600px; }
+
+  .classroom {
+    background: white; border-radius: 12px; padding: 30px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative;
+  }
+
+  .teacher-desk {
+    background: #4299e1; color: white; text-align: center;
+    padding: 12px; border-radius: 8px; margin-bottom: 30px;
+    font-weight: bold; font-size: 16px;
+  }
+
+  .room-layout {
+    display: grid;
+    grid-template-areas:
+      "top-row top-row top-row top-row top-row"
+      "left-col . . . right-col"
+      "left-col . . . right-col"
+      "left-col . . . right-col"
+      "bottom-row bottom-row bottom-row bottom-row bottom-row";
+    gap: 8px;
+    position: relative;
+  }
+
+  .computer-slot {
+    background: #edf2f7; border: 2px dashed #cbd5e0; border-radius: 8px;
+    padding: 8px; text-align: center; cursor: pointer; transition: all 0.2s;
+    min-width: 70px; min-height: 70px;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+  }
+  .computer-slot:hover { border-color: #4299e1; background: #ebf8ff; }
+  .computer-slot.occupied { background: #c6f6d5; border: 2px solid #48bb78; }
+  .computer-slot.fixed-seat { background: #fefcbf; border: 2px solid #f6e05e; }
+  .computer-slot.drag-over { background: #bee3f8; border: 2px solid #4299e1; }
+
+  .computer-num { font-size: 11px; color: #718096; }
+  .student-num { font-size: 14px; font-weight: bold; color: #2d3748; }
+
+  /* 學生列表 */
+  .student-pool {
+    background: white; border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 20px;
+  }
+  .student-pool h2 { color: #4a5568; margin-bottom: 15px; font-size: 16px; }
+  .students-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .student-badge {
+    background: #4299e1; color: white; padding: 6px 12px;
+    border-radius: 20px; font-size: 13px; cursor: grab;
+    user-select: none; transition: all 0.2s;
+  }
+  .student-badge:hover { background: #3182ce; transform: scale(1.05); }
+  .student-badge.assigned { background: #a0aec0; cursor: not-allowed; }
+  .student-badge.dragging { opacity: 0.5; }
+
+  /* 歷史記錄 */
+  .history-panel {
+    background: white; border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 20px;
+  }
+  .history-panel h2 { color: #4a5568; margin-bottom: 15px; font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+  .history-record { background: #f7fafc; border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: 12px; }
+  .history-record .timestamp { color: #718096; margin-bottom: 5px; }
+  .history-record .seats { display: flex; flex-wrap: wrap; gap: 4px; }
+  .history-badge { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; }
+
+  .top-row { grid-area: top-row; display: flex; gap: 8px; justify-content: center; }
+  .left-col { grid-area: left-col; display: flex; flex-direction: column; gap: 8px; }
+  .right-col { grid-area: right-col; display: flex; flex-direction: column; gap: 8px; }
+  .bottom-row { grid-area: bottom-row; display: flex; gap: 8px; justify-content: center; }
+  .center-space { grid-area: 2/2/5/5; display: flex; align-items: center; justify-content: center; }
+  .center-label { color: #cbd5e0; font-size: 24px; font-style: italic; }
+
+  .warning { background: #fff5f5; border: 1px solid #fed7d7; color: #c53030; padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-bottom: 10px; display: none; }
+</style>
+</head>
+<body>
+<h1>🖥️ 教室座位分配系統</h1>
+
+<div class="container">
+  <!-- 控制面板 -->
+  <div class="control-panel">
+    <h2>⚙️ 控制面板</h2>
+
+    <div class="warning" id="warning"></div>
+
+    <button class="btn btn-primary" onclick="randomAssign()">🎲 隨機分配座位</button>
+    <button class="btn btn-danger" onclick="clearAll()">🗑️ 清除所有分配</button>
+
+    <div class="section">
+      <h2 style="font-size:14px; color:#4a5568; margin-bottom:10px;">🚫 設定不可相鄰限制</h2>
+      <label>學生A（學號）</label>
+      <select id="restrictA"></select>
+      <label>學生B（學號）</label>
+      <select id="restrictB"></select>
+      <button class="btn btn-danger" onclick="addRestriction()">新增限制</button>
+      <div class="restriction-list" id="restrictionList"></div>
+    </div>
+
+    <div class="section">
+      <h2 style="font-size:14px; color:#4a5568; margin-bottom:10px;">📌 固定座位設定</h2>
+      <label>選擇學生</label>
+      <select id="fixStudent"></select>
+      <label>選擇電腦編號</label>
+      <select id="fixComputer"></select>
+      <button class="btn btn-success" onclick="addFixedSeat()">固定此座位</button>
+      <div class="fixed-list" id="fixedList"></div>
+    </div>
+  </div>
+
+  <!-- 教室區域 -->
+  <div class="classroom-area">
+    <div class="classroom">
+      <div class="teacher-desk">📋 教師講台</div>
+      <div class="room-layout" id="roomLayout">
+        <!-- 由JS生成 -->
+      </div>
+    </div>
+
+    <!-- 學生池 -->
+    <div class="student-pool">
+      <h2>👥 待分配學生（可拖拉到座位）</h2>
+      <div class="students-grid" id="studentsGrid"></div>
+    </div>
+
+    <!-- 歷史記錄 -->
+    <div class="history-panel">
+      <h2>📋 歷史座位記錄</h2>
+      <div id="historyList"><p style="color:#a0aec0; font-size:13px;">尚無記錄</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 數據
+const students = [2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34]; // 偶數學號
+const computers = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17];
+
+// 電腦佈局（圍著長方形一圈）
+// 底部（靠近講台）: 1-5，左側: 6-8，頂部: 9-13，右側: 14-16，加上角落 17
+const layout = {
+  bottom: [1,2,3,4,5],
+  left: [6,7,8],
+  top: [9,10,11,12,13],
+  right: [14,15,16],
+  extra: [17] // 可放在底部或頂部
+};
+
+// 重新定義佈局：頂部5台，左側3台，右側3台，底部5台 = 16台，第17台放底部中間附近
+const topComputers = [9,10,11,12,13];
+const leftComputers = [6,7,8];
+const rightComputers = [14,15,16];
+const bottomComputers = [1,2,3,4,5,17];
+
+let assignments = {}; // {computerId: studentId}
+let restrictions = []; // [{a, b}]
+let fixedSeats = {}; // {computerId: studentId}
+let history = []; // 歷史記錄
+
+// 初始化
+function init() {
+  renderLayout();
+  renderStudentPool();
+  populateSelects();
+}
+
+function populateSelects() {
+  const selects = ['restrictA','restrictB','fixStudent'];
+  selects.forEach(id => {
+    const el = document.getElementById(id);
+    el.innerHTML = students.map(s => `<option value="${s}">學號 ${s}</option>`).join('');
+  });
+  const compSel = document.getElementById('fixComputer');
+  compSel.innerHTML = computers.map(c => `<option value="${c}">電腦 ${c}</option>`).join('');
+}
+
+function renderLayout() {
+  const layout = document.getElementById('roomLayout');
+  layout.innerHTML = '';
+
+  // 頂部
+  const topRow = document.createElement('div');
+  topRow.className = 'top-row';
+  topComputers.forEach(c => topRow.appendChild(createSlot(c)));
+  layout.appendChild(topRow);
+
+  // 中間（左、空、右）
+  const middleRow = document.createElement('div');
+  middleRow.style.cssText = 'display:flex; gap:8px; justify-content:space-between; align-items:stretch;';
+
+  const leftCol = document.createElement('div');
+  leftCol.className = 'left-col';
+  leftComputers.forEach(c => leftCol.appendChild(createSlot(c)));
+
+  const centerSpace = document.createElement('div');
+  centerSpace.className = 'center-space';
+  centerSpace.style.cssText = 'flex:1; display:flex; align-items:center; justify-content:center; min-height:200px;';
+  centerSpace.innerHTML = '<span class="center-label">教室中央</span>';
+
+  const rightCol = document.createElement('div');
+  rightCol.className = 'right-col';
+  rightComputers.forEach(c => rightCol.appendChild(createSlot(c)));
+
+  middleRow.appendChild(leftCol);
+  middleRow.appendChild(centerSpace);
+  middleRow.appendChild(rightCol);
+  layout.appendChild(middleRow);
+
+  // 底部
+  const bottomRow = document.createElement('div');
+  bottomRow.className = 'bottom-row';
+  bottomComputers.forEach(c => bottomRow.appendChild(createSlot(c)));
+  layout.appendChild(bottomRow);
+}
+
+function createSlot(computerId) {
+  const slot = document.createElement('div');
+  slot.className = 'computer-slot';
+  slot.id = `slot-${computerId}`;
+  slot.dataset.computer = computerId;
+
+  const studentId = assignments[computerId];
+  const isFixed = fixedSeats[computerId];
+
+  if (isFixed) slot.classList.add('fixed-seat');
+  if (studentId) slot.classList.add('occupied');
+
+  slot.innerHTML = `
+    <div class="computer-num">💻 電腦${computerId}</div>
+    <div class="student-num">${studentId ? `學號${studentId}` : '空'}</div>
+    ${isFixed ? '<div style="font-size:10px;color:#b7791f;">📌固定</div>' : ''}
+  `;
+
+  // 拖放接收
+  slot.addEventListener('dragover', e => {
+    e.preventDefault();
+    slot.classList.add('drag-over');
+  });
+  slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
+  slot.addEventListener('drop', e => {
+    e.preventDefault();
+    slot.classList.remove('drag-over');
+    const studentId = parseInt(e.dataTransfer.getData('studentId'));
+    dragAssign(studentId, computerId);
+  });
+
+  return slot;
+}
+
+function renderStudentPool() {
+  const grid = document.getElementById('studentsGrid');
+  grid.innerHTML = '';
+  students.forEach(s => {
+    const badge = document.createElement('div');
+    badge.className = 'student-badge';
+    badge.textContent = `學號 ${s}`;
+    badge.draggable = true;
+
+    const assigned = Object.values(assignments).includes(s);
+    if (assigned) {
+      badge.classList.add('assigned');
+      badge.draggable = false;
+    }
+
+    badge.addEventListener('dragstart', e => {
+      if (assigned) return;
+      e.dataTransfer.setData('studentId', s);
+      badge.classList.add('dragging');
+    });
+    badge.addEventListener('dragend', () => badge.classList.remove('dragging'));
+
+    grid.appendChild(badge);
+  });
+}
+
+function dragAssign(studentId, computerId) {
+  // 檢查是否已被分配
+  const currentComputer = Object.keys(assignments).find(k => assignments[k] === studentId);
+  if (currentComputer) delete assignments[currentComputer];
+
+  // 如果該位置已有學生，交換
+  const existingStudent = assignments[computerId];
+  if (existingStudent && currentComputer) {
+    assignments[currentComputer] = existingStudent;
+  } else if (existingStudent) {
+    delete assignments[computerId];
+  }
+
+  assignments[computerId] = studentId;
+
+  // 如果是拖拉固定，設為固定座位
+  fixedSeats[computerId] = studentId;
+
+  renderLayout();
+  renderStudentPool();
+  renderFixedList();
+  showWarning('');
+}
+
+// 隨機分配
+function randomAssign() {
+  // 保存當前固定座位
+  const newAssignments = {};
+
+  // 先放入固定座位
+  Object.entries(fixedSeats).forEach(([comp, stu]) => {
+    newAssignments[parseInt(comp)] = stu;
+  });
+
+  // 剩餘學生和電腦
+  const assignedStudents = new Set(Object.values(newAssignments));
+  const assignedComputers = new Set(Object.keys(newAssignments).map(Number));
+
+  let remainStudents = students.filter(s => !assignedStudents.has(s));
+  let remainComputers = computers.filter(c => !assignedComputers.has(c));
+
+  // 嘗試隨機分配（考慮限制和歷史）
+  const maxAttempts = 1000;
+  let attempt = 0;
+  let success = false;
+
+  while (attempt < maxAttempts) {
+    attempt++;
+    const shuffled = [...remainStudents].sort(() => Math.random() - 0.5);
+    const testAssign = {...newAssignments};
+
+    remainComputers.forEach((comp, idx) => {
+      testAssign[comp] = shuffled[idx];
+    });
+
+    if (checkRestrictions(testAssign) && checkHistory(testAssign)) {
+      Object.assign(newAssignments, testAssign);
+      success = true;
+      break;
+    }
+  }
+
+  if (!success) {
+    // 嘗試只滿足限制，不管歷史
+    attempt = 0;
+    while (attempt < maxAttempts) {
+      attempt++;
+      const shuffled = [...remainStudents].sort(() => Math.random() - 0.5);
+      const testAssign = {...newAssignments};
+      remainComputers.forEach((comp, idx) => {
+        testAssign[comp] = shuffled[idx];
+      });
+      if (checkRestrictions(testAssign)) {
+        Object.assign(newAssignments, testAssign);
+        showWarning('⚠️ 無法完全避免重複歷史座位，已盡量減少重複。');
+        success = true;
+        break;
+      }
+    }
+  }
+
+  if (!success) {
+    // 強制分配
+    const shuffled = [...remainStudents].sort(() => Math.random() - 0.5);
+    remainComputers.forEach((comp, idx) => {
+      newAssignments[comp] = shuffled[idx];
+    });
+    showWarning('⚠️ 限制條件過多，無法完全滿足，已盡力分配。');
+  }
+
+  // 保存歷史
+  saveHistory(assignments);
+  assignments = newAssignments;
+
+  renderLayout();
+  renderStudentPool();
+}
+
+function checkRestrictions(assign) {
+  // 獲取相鄰電腦對
+  const adjacent = getAdjacentPairs();
+  for (const [a, b] of adjacent) {
+    const stuA = assign[a];
+    const stuB = assign[b];
+    if (!stuA || !stuB) continue;
+    for (const r of restrictions) {
+      if ((r.a === stuA && r.b === stuB) || (r.a === stuB && r.b === stuA)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function getAdjacentPairs() {
+  // 定義相鄰關係（同排相鄰）
+  const allRows = [topComputers, bottomComputers, leftComputers, rightComputers];
+  const pairs = [];
+  allRows.forEach(row => {
+    for (let i = 0; i < row.length - 1; i++) {
+      pairs.push([row[i], row[i+1]]);
+    }
+  });
+  // 角落相鄰
+  pairs.push([topComputers[0], leftComputers[0]]);
+  pairs.push([topComputers[topComputers.length-1], rightComputers[0]]);
+  pairs.push([bottomComputers[0], leftComputers[leftComputers.length-1]]);
+  pairs.push([bottomComputers[bottomComputers.length-1], rightComputers[rightComputers.length-1]]);
+  return pairs;
+}
+
+function checkHistory(assign) {
+  if (history.length === 0) return true;
+  const lastRecord = history[history.length - 1];
+  let sameCount = 0;
+  Object.entries(assign).forEach(([comp, stu]) => {
+    if (lastRecord[comp] === stu) sameCount++;
+  });
+  // 允許最多3個相同位置
+  return sameCount <= 3;
+}
+
+function saveHistory(currentAssign) {
+  if (Object.keys(currentAssign).length === 0) return;
+  const record = {
+    timestamp: new Date().toLocaleString('zh-TW'),
+    seats: {...currentAssign}
+  };
+  history.push(record);
+  if (history.length > 5) history.shift(); // 只保留最近5次
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (history.length === 0) {
+    list.innerHTML = '<p style="color:#a0aec0; font-size:13px;">尚無記錄</p>';
+    return;
+  }
+  list.innerHTML = [...history].reverse().map((record, idx) => `
+    <div class="history-record">
+      <div class="timestamp">📅 第${history.length - idx}次分配：${record.timestamp}</div>
+      <div class="seats">
+        ${Object.entries(record.seats).sort((a,b)=>a[0]-b[0]).map(([comp, stu]) =>
+          `<span class="history-badge">電腦${comp}→學號${stu}</span>`
+        ).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+// 限制設定
+function addRestriction() {
+  const a = parseInt(document.getElementById('restrictA').value);
+  const b = parseInt(document.getElementById('restrictB').value);
+  if (a === b) { showWarning('請選擇不同的兩位學生！'); return; }
+  if (restrictions.find(r => (r.a===a&&r.b===b)||(r.a===b&&r.b===a))) {
+    showWarning('此限制已存在！'); return;
+  }
+  restrictions.push({a, b});
+  renderRestrictionList();
+  showWarning('');
+}
+
+function renderRestrictionList() {
+  const list = document.getElementById('restrictionList');
+  if (restrictions.length === 0) {
+    list.innerHTML = '<p style="color:#a0aec0; font-size:12px;">尚無限制</p>';
+    return;
+  }
+  list.innerHTML = restrictions.map((r, idx) => `
+    <div class="restriction-item">
+      <span>學號${r.a} ≠ 學號${r.b}</span>
+      <button onclick="removeRestriction(${idx})">✕</button>
+    </div>
+  `).join('');
+}
+
+function removeRestriction(idx) {
+  restrictions.splice(idx, 1);
+  renderRestrictionList();
+}
+
+// 固定座位
+function addFixedSeat() {
+  const student = parseInt(document.getElementById('fixStudent').value);
+  const computer = parseInt(document.getElementById('fixComputer').value);
+
+  // 移除該學生其他固定
+  Object.keys(fixedSeats).forEach(k => {
+    if (fixedSeats[k] === student) delete fixedSeats[k];
+  });
+
+  fixedSeats[computer] = student;
+  assignments[computer] = student;
+
+  renderLayout();
+  renderStudentPool();
+  renderFixedList();
+}
+
+function renderFixedList() {
+  const list = document.getElementById('fixedList');
+  if (Object.keys(fixedSeats).length === 0) {
+    list.innerHTML = '<p style="color:#a0aec0; font-size:12px;">尚無固定座位</p>';
+    return;
+  }
+  list.innerHTML = Object.entries(fixedSeats).map(([comp, stu]) => `
+    <div class="fixed-item">
+      <span>學號${stu} → 電腦${comp}</span>
+      <button onclick="removeFixed(${comp})">✕</button>
+    </div>
+  `).join('');
+}
+
+function removeFixed(comp) {
+  delete fixedSeats[comp];
+  renderFixedList();
+  renderLayout();
+}
+
+function clearAll() {
+  if (!confirm('確定要清除所有分配嗎？固定座位和限制設定將保留。')) return;
+  saveHistory(assignments);
+  assignments = {};
+  // 重新應用固定座位
+  Object.entries(fixedSeats).forEach(([comp, stu]) => {
+    assignments[parseInt(comp)] = stu;
+  });
+  renderLayout();
+  renderStudentPool();
+}
+
+function showWarning(msg) {
+  const el = document.getElementById('warning');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+// 初始化
+init();
+renderRestrictionList();
+renderFixedList();
+</script>
+</body>
+</html>
